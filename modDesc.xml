@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="72">
-    <author>Az#4971</author>
-    <version>1.2.1.0</version>
+    <author>Az#4971, Shad0wlife</author>
+    <version>2.0.0.0</version>
     <title>
         <en>Upgradable Factories</en>
         <fr>Usines Améliorables</fr>
@@ -138,7 +138,7 @@ Grazie ai collaboratori di github]]>
        </it>
     </description>
     <iconFilename>icon.dds</iconFilename>
-    <multiplayer supported="false"/>
+    <multiplayer supported="true"/>
     <extraSourceFiles>
         <sourceFile filename="UpgradableFactories.lua" />
     </extraSourceFiles>

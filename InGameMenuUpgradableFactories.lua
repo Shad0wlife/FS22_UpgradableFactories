@@ -62,16 +62,18 @@ end
 
 function InGameMenuUpgradableFactories:onUpgradeConfirm(confirm, prodpoint)
     if confirm then
-        g_currentMission:addMoney(-prodpoint.owningPlaceable.upgradePrice, 1, MoneyType.SHOP_PROPERTY_BUY, true, true)
-        
-        prodpoint.productionLevel = prodpoint.productionLevel + 1
-        UpgradableFactories:adjProdPoint2lvl(prodpoint, prodpoint.productionLevel)
-     
-        self.pageProduction.productionList:reloadData()
+        -- Send event, the actual buying/money change needs to be done by the server
+        UpdateProductionEvent.sendEvent(prodpoint)
         
         UFInfo("Upgrade confirmed")
     else
         UFInfo("Upgrade canceled")
+    end
+end
+
+function InGameMenuUpgradableFactories:refreshProductionPage()
+    if self.pageProduction.productionList ~= nil and self.pageProduction.chainManager ~= nil then
+        self.pageProduction.productionList:reloadData()
     end
 end
 

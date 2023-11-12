@@ -7,6 +7,8 @@ UpgradableFactories = {
 }
 
 source(modDirectory .. "InGameMenuUpgradableFactories.lua")
+source(modDirectory .. "UpgradeProductionEvent.lua")
+source(modDirectory .. "ProductionUpgradedEvent.lua")
 addModEventListener(UpgradableFactories)
 
 function UFInfo(infoMessage, ...)
@@ -19,31 +21,38 @@ function UpgradableFactories:loadMap()
 	
 	InGameMenuUpgradableFactories:initialize()
 	
-	if not self.newSavegame then
-		xmlFilename = g_currentMission.missionInfo.savegameDirectory .. "/upgradableFactories.xml"
+	--Only server does savegame stuff
+	if g_currentMission:getIsServer() then
+		UFInfo("Game is Server -> Get Production levels from Savegame")
+		if not self.newSavegame then
+			xmlFilename = g_currentMission.missionInfo.savegameDirectory .. "/upgradableFactories.xml"
+		end
+		self:loadXML()
+		
+		addConsoleCommand('ufMaxLevel', 'Update UpgradableFactories max level', 'updateml', self)
+		g_messageCenter:subscribe(MessageType.SAVEGAME_LOADED, self.onSavegameLoaded, self)
+	else
+		UFInfo("Game is Client -> Get Production levels from Sync")
 	end
-	self:loadXML()
-	
-	addConsoleCommand('ufMaxLevel', 'Update UpgradableFactories max level', 'updateml', self)
-	g_messageCenter:subscribe(MessageType.SAVEGAME_LOADED, self.onSavegameLoaded, self)
 end
 
 function UpgradableFactories:delete()
 	g_messageCenter:unsubscribeAll(self)
 end
 
-function UpgradableFactories:onSavegameLoaded()
-	self:initializeLoadedProductions()
-end
 
-local function getProductionPointFromPosition(pos)
+
+
+local function getProductionPointFromPosition(pos, farmId)
 	if #g_currentMission.productionChainManager.farmIds < 1 then
 		return nil
 	end
 	
-	for _,prod in ipairs(g_currentMission.productionChainManager.farmIds[1].productionPoints) do
-		if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
-			return prod
+	if g_currentMission.productionChainManager.farmIds[farmId] ~= nil then
+		for _,prod in ipairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
+			if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
+				return prod
+			end
 		end
 	end
 	return nil
@@ -57,6 +66,7 @@ end
 local function getCycleAtLvl(cycle, lvl)
 	-- Production speed increase by it's base value each level.
 	-- A bonus of 15% of the base speed is applied per level starting at the level 2
+	-- eg. base cycles were 100, factory at lvl 3: 100*3 + 100*0.15*(3-1) = 300 + 100*0.15*2 = 300 + 30 = 330
 	lvl = tonumber(lvl)
 	local adj = cycle * lvl + cycle * 0.15 * (lvl - 1)
 	if adj < 1 then
@@ -92,11 +102,22 @@ local function getOverallProductionValue(basePrice, lvl)
 	return basePrice + value
 end
 
+
+-- Formats the Production UI Name to show its level
 local function prodPointUFName(basename, level)
 	return string.format("%d - %s", level, basename)
 end
 
-function UpgradableFactories:adjProdPoint2lvl(prodpoint, lvl)
+
+function UpgradableFactories:upgradeProductionByOne(prodpoint)
+	--deduct the upgrade price from the farmId owning the placeable with the prodpoint
+	g_currentMission:addMoney(-prodpoint.owningPlaceable.upgradePrice, prodpoint:getOwnerFarmId(), MoneyType.SHOP_PROPERTY_BUY, true, true)
+	
+	UpgradableFactories:updateProductionPointLevel(prodpoint, prodpoint.productionLevel + 1)
+end
+
+function UpgradableFactories:updateProductionPointLevel(prodpoint, lvl)
+	prodpoint.productionLevel = lvl
 	prodpoint.name = prodPointUFName(prodpoint.baseName, lvl)
 	
 	for _,prod in ipairs(prodpoint.productions) do
@@ -123,23 +144,38 @@ function UpgradableFactories:adjProdPoint2lvl(prodpoint, lvl)
 		end
 		return math.floor(prodpoint.owningPlaceable.totalValue * math.max(priceMultiplier, 0.05))
 	end
+	
+	-- Refresh gui only on non-dedicated servers and if the updated production belongs to the own farm
+	if g_dedicatedServer == nil and FSBaseMission.player ~= nil and prodpoint:getOwnerFarmId() == FSBaseMission.player.farmId then
+		InGameMenuUpgradableFactories:refreshProductionPage()
+	end
+	
+	-- broadCast event doesn't run if this is not a server, that is checked in broadcastEvent itself
+	ProductionUpgradedEvent.broadcastEvent(prodpoint, lvl)
 end
 
+-- Server only
+function UpgradableFactories:onSavegameLoaded()
+	self:initializeLoadedProductions()
+end
+
+-- Server only
 function UpgradableFactories:initializeLoadedProductions()
 	if self.newSavegame or #self.loadedProductions < 1 then
 		return
 	end
 	
 	for _,loadedProd in ipairs(self.loadedProductions) do
-		local prodpoint = getProductionPointFromPosition(loadedProd.position)
+		local prodpoint = getProductionPointFromPosition(loadedProd.position, loadedProd.farmId)
 		if prodpoint then
 			UFInfo("Initialize loaded production %s [is upgradable: %s]", prodpoint.baseName, prodpoint.isUpgradable)
 			if prodpoint.isUpgradable then
-				prodpoint.productionLevel = loadedProd.level
+				--prodpoint.productionLevel = loadedProd.level
+				--above is done in updateProductionPointLevel
 				prodpoint.owningPlaceable.price = loadedProd.basePrice
 				prodpoint.owningPlaceable.totalValue = getOverallProductionValue(loadedProd.basePrice, loadedProd.level)
 				
-				self:adjProdPoint2lvl(prodpoint, loadedProd.level)
+				self:updateProductionPointLevel(prodpoint, loadedProd.level)
 				
 				prodpoint.storage.fillLevels = loadedProd.fillLevels
 			end
@@ -188,8 +224,9 @@ end
 
 function UpgradableFactories.setOwnerFarmId(prodpoint, farmId)
 	if farmId == 0 and prodpoint.productions[1].baseCyclesPerMinute then
-		prodpoint.productionLevel = 1
-		UpgradableFactories:adjProdPoint2lvl(prodpoint, 1)
+		--prodpoint.productionLevel = 1
+		--above is done in updateProductionPointLevel
+		UpgradableFactories:updateProductionPointLevel(prodpoint, 1)
 	end
 end
 
@@ -217,6 +254,8 @@ function UpgradableFactories:updateml(arg)
 	UFInfo("Production maximum level has been updated to level "..n, "")
 end
 
+
+--This code can be adapted to sync all current productions to a connecting client.
 function UpgradableFactories.saveToXML()
 	UFInfo("Saving to XML")
 	-- on a new save, create xmlFile path
@@ -228,36 +267,61 @@ function UpgradableFactories.saveToXML()
 	xmlFile:setInt("upgradableFactories#maxLevel", UpgradableFactories.MAX_LEVEL)
 	
 	-- check if player has owned production installed
-	if #g_currentMission.productionChainManager.farmIds > 0 then	
-		local prodpoints = g_currentMission.productionChainManager.farmIds[1].productionPoints
+	if #g_currentMission.productionChainManager.farmIds > 0 then
 		local idx = 0
-		for _,prodpoint in ipairs(prodpoints) do
-			if prodpoint.isUpgradable then
-				local key = string.format("upgradableFactories.production(%d)", idx)
-				xmlFile:setInt(key .. "#id", idx+1)
-				xmlFile:setString(key .. "#name", prodpoint.baseName)
-				xmlFile:setInt(key .. "#level", prodpoint.productionLevel)
-				xmlFile:setInt(key .. "#basePrice", prodpoint.owningPlaceable.price)
-				xmlFile:setInt(key .. "#totalValue", prodpoint.owningPlaceable.totalValue)
-				
-				local key2 = key .. ".position"
-				xmlFile:setFloat(key2 .. "#x", prodpoint.owningPlaceable.position.x)
-				xmlFile:setFloat(key2 .. "#y", prodpoint.owningPlaceable.position.y)
-				xmlFile:setFloat(key2 .. "#z", prodpoint.owningPlaceable.position.z)
-				
-				local j = 0
-				key2 = ""
-				for ft,val in pairs(prodpoint.storage.fillLevels) do
-					key2 = key .. string.format(".fillLevels.fillType(%d)", j)
-					xmlFile:setString(key2 .. "#fillType", g_currentMission.fillTypeManager:getFillTypeByIndex(ft).name)
-					xmlFile:setInt(key2 .. "#fillLevel", val)
-					j = j + 1
+		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
+			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
+				local prodpoints = farmTable.productionPoints
+				for _,prodpoint in ipairs(prodpoints) do
+					if prodpoint.isUpgradable then
+						local key = string.format("upgradableFactories.production(%d)", idx)
+						xmlFile:setInt(key .. "#id", idx+1) --printed id is 1-indexed, but xml element access is 0-indexed
+						xmlFile:setInt(key .. "#farmId", farmId)
+						xmlFile:setString(key .. "#name", prodpoint.baseName)
+						xmlFile:setInt(key .. "#level", prodpoint.productionLevel)
+						xmlFile:setInt(key .. "#basePrice", prodpoint.owningPlaceable.price)
+						xmlFile:setInt(key .. "#totalValue", prodpoint.owningPlaceable.totalValue)
+						
+						local key2 = key .. ".position"
+						xmlFile:setFloat(key2 .. "#x", prodpoint.owningPlaceable.position.x)
+						xmlFile:setFloat(key2 .. "#y", prodpoint.owningPlaceable.position.y)
+						xmlFile:setFloat(key2 .. "#z", prodpoint.owningPlaceable.position.z)
+						
+						local j = 0
+						key2 = ""
+						for ft,val in pairs(prodpoint.storage.fillLevels) do
+							key2 = key .. string.format(".fillLevels.fillType(%d)", j)
+							xmlFile:setString(key2 .. "#fillType", g_currentMission.fillTypeManager:getFillTypeByIndex(ft).name)
+							xmlFile:setInt(key2 .. "#fillLevel", val)
+							j = j + 1
+						end
+						idx = idx+1
+					end
 				end
-				idx = idx+1
+			end
+		end
+		
+	end
+	xmlFile:save()
+end
+
+function UpgradableFactories.sendAllToClient(connection)
+	if #g_currentMission.productionChainManager.farmIds > 0 then
+		local idx = 0
+		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
+			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
+				local prodpoints = farmTable.productionPoints
+				for _,prodpoint in ipairs(prodpoints) do
+					if prodpoint.isUpgradable and prodpoint.productionLevel > 1 then
+						-- Fill levels are synced by the game I believe, so we only sync production level for now
+						connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))
+						
+						idx = idx+1
+					end
+				end
 			end
 		end
 	end
-	xmlFile:save()
 end
 
 function UpgradableFactories:loadXML()
@@ -280,11 +344,11 @@ function UpgradableFactories:loadXML()
 		
 		if not getXMLInt(xmlFile.handle, key .. "#id") then break end
 		
-		local level = getXMLInt(xmlFile.handle,key .. "#level")
 		table.insert(
 			self.loadedProductions,
 			{
-				level = level,
+				level = xmlFile:getInt(key .. "#level", 1),
+				farmId = xmlFile:getInt(key .. "#farmId", 1),
 				name = getXMLString(xmlFile.handle, key .. "#name"),
 				basePrice = getXMLInt(xmlFile.handle,key .. "#basePrice"),
 				position = {
@@ -333,4 +397,5 @@ end
 
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
+FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.sendInitialClientState, UpgradableFactories.sendAllToClient)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
