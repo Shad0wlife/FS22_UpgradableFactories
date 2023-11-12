@@ -249,7 +249,6 @@ function UpgradableFactories.saveToXML()
 				key2 = ""
 				for ft,val in pairs(prodpoint.storage.fillLevels) do
 					key2 = key .. string.format(".fillLevels.fillType(%d)", j)
-					xmlFile:setInt(key2 .. "#id", ft)
 					xmlFile:setString(key2 .. "#fillType", g_currentMission.fillTypeManager:getFillTypeByIndex(ft).name)
 					xmlFile:setInt(key2 .. "#fillLevel", val)
 					j = j + 1
@@ -301,9 +300,13 @@ function UpgradableFactories:loadXML()
 		while true do
 			local key2 = key .. string.format(".fillLevels.fillType(%d)", counter2)
 			
-			if not getXMLString(xmlFile.handle, key2 .. "#fillType") then break end
+			local fillTypeName = getXMLString(xmlFile.handle, key2 .. "#fillType")
+			if not fillTypeName then 
+				break 
+			end
 			
-			capacities[getXMLInt(xmlFile.handle, key2 .. "#id")] = getXMLInt(xmlFile.handle, key2 .. "#fillLevel")
+			local fillTypeIndex = g_currentMission.fillTypeManager:getFillTypeIndexByName(fillTypeName)
+			capacities[fillTypeIndex] = getXMLInt(xmlFile.handle, key2 .. "#fillLevel")
 			
 			counter2 = counter2 +1
 		end
