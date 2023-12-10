@@ -55,7 +55,7 @@ function InGameMenuUpgradableFactories.onListSelectionChanged(pageProduction, li
     local prodpoints = pageProduction:getProductionPoints()
     if #prodpoints > 0 then
         local prodpoint = prodpoints[section]
-        pageProduction.upgradeButtonInfo.disabled = not prodpoint.isUpgradable
+        pageProduction.upgradeButtonInfo.disabled = prodpoint == nil or not prodpoint.isUpgradable
         pageProduction:setMenuButtonInfoDirty()
     end
 end
