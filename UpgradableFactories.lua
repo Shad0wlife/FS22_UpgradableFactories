@@ -305,7 +305,7 @@ function UpgradableFactories.saveToXML()
 	xmlFile:save()
 end
 
-function UpgradableFactories.sendAllToClient(connection)
+function UpgradableFactories.sendAllToClient(fsBaseMission, connection, user, farm)
 	if #g_currentMission.productionChainManager.farmIds > 0 then
 		local idx = 0
 		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
