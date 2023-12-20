@@ -15,14 +15,25 @@ function UFInfo(infoMessage, ...)
 	print(string.format("  UpgradableFactories: " .. infoMessage, ...))
 end
 
+function UFDebug(debugMessage, ...)
+	print(string.format("  [DEBUG] UpgradableFactories: " .. debugMessage, ...))
+end
+
 function UpgradableFactories:loadMap()
 	self.newSavegame = not g_currentMission.missionInfo.savegameDirectory or nil
 	self.loadedProductions = {}
 	
-	InGameMenuUpgradableFactories:initialize()
+	--Only initialize menu on non-dedicated server games
+	if g_dedicatedServer == nil
+		UFDebug("loadMap() on non-dedicated game - initializing the menu now.")
+		InGameMenuUpgradableFactories:initialize()
+	else
+		UFDebug("loadMap() on dedicated server does not initialize the menu.")
+	end
 	
 	--Only server does savegame stuff
 	if g_currentMission:getIsServer() then
+		UFDebug("loadMap() was called by the server.")
 		UFInfo("Game is Server -> Get Production levels from Savegame")
 		if not self.newSavegame then
 			xmlFilename = g_currentMission.missionInfo.savegameDirectory .. "/upgradableFactories.xml"
@@ -32,6 +43,7 @@ function UpgradableFactories:loadMap()
 		addConsoleCommand('ufMaxLevel', 'Update UpgradableFactories max level', 'updateml', self)
 		g_messageCenter:subscribe(MessageType.SAVEGAME_LOADED, self.onSavegameLoaded, self)
 	else
+		UFDebug("loadMap() was called by the client.")
 		UFInfo("Game is Client -> Get Production levels from Sync")
 	end
 end
@@ -51,6 +63,7 @@ local function getProductionPointFromPosition(pos, farmId)
 	if g_currentMission.productionChainManager.farmIds[farmId] ~= nil then
 		for _,prod in ipairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
 			if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
+				UFDebug("Found production %s at position x=%f, z=%f", prod.getName(), pos.x, pos.z)
 				return prod
 			end
 		end
@@ -156,6 +169,7 @@ end
 
 -- Server only
 function UpgradableFactories:onSavegameLoaded()
+	UFDebug("onSavegameLoaded() was called. This should only happen on the server.")
 	self:initializeLoadedProductions()
 end
 
@@ -169,6 +183,7 @@ function UpgradableFactories:initializeLoadedProductions()
 		local prodpoint = getProductionPointFromPosition(loadedProd.position, loadedProd.farmId)
 		if prodpoint then
 			UFInfo("Initialize loaded production %s [is upgradable: %s]", prodpoint.baseName, prodpoint.isUpgradable)
+			UFDebug("If the productions show up here on savegame load, and isUpgradeable is false, they need additional initialization.")
 			if prodpoint.isUpgradable then
 				--prodpoint.productionLevel = loadedProd.level
 				--above is done in updateProductionPointLevel
@@ -179,12 +194,16 @@ function UpgradableFactories:initializeLoadedProductions()
 				
 				prodpoint.storage.fillLevels = loadedProd.fillLevels
 			end
+			
+			UFDebug("prodpoint %s has baseCyclesPerMinute %s", prodpoint:getName(), (prodpoint.baseCyclesPerMinute ~= nil and prodpoint.baseCyclesPerMinute.tostring()) or "nil")
 		end
 	end
 end
 
 function UpgradableFactories:initializeProduction(prodpoint)
 	if not prodpoint.isUpgradable then
+		UFDebug("Initializing prodpoint %s", prodpoint:getName())
+	
 		prodpoint.isUpgradable = true
 		prodpoint.productionLevel = 1
 		
@@ -301,6 +320,8 @@ function UpgradableFactories.saveToXML()
 			end
 		end
 		
+		UFDebug("Saved %d productions to XML.", idx)
+		
 	end
 	xmlFile:save()
 end
@@ -321,6 +342,8 @@ function UpgradableFactories.sendAllToClient(fsBaseMission, connection, user, fa
 				end
 			end
 		end
+		
+		UFDebug("Sent %d production level events to the synced client.", idx)
 	end
 end
 
