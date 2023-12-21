@@ -346,6 +346,17 @@ function UpgradableFactories.saveToXML()
 end
 
 function UpgradableFactories.notifyProductionLevel(connection, prodpoint)
+	
+	if prodpoint ~= nil then
+		UFDebug("Working on stream request for production data of %s", self.productionPoint:getName())
+	else
+		UFDebug("[WARNING] Working on request for nil production point!!!")
+	end
+	
+	if connection == nil then
+		UFDebug("[WARNING] Working on request for nil client connection!!!")
+	end
+
 	if prodpoint.isUpgradable then
 		UFDebug("Replying to client request for production data of %s", prodpoint:getName())
 		connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))

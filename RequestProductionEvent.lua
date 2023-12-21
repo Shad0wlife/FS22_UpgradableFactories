@@ -20,6 +20,12 @@ end
 ---
 function RequestProductionEvent:readStream(streamId, connection)
     self.productionPoint = NetworkUtil.readNodeObject(streamId)
+	
+	if self.productionPoint ~= nil then
+		UFDebug("Received stream request for production data of %s", self.productionPoint:getName())
+	else
+		UFDebug("[WARNING] Received request for nil production point!!!")
+	end
     
     self:run(connection)
 end
@@ -37,6 +43,12 @@ function RequestProductionEvent:run(connection)
 end
 
 function RequestProductionEvent.sendEvent(productionPoint)
+	if productionPoint ~= nil then
+		UFDebug("Requesting production data of %s", productionPoint:getName())
+	else
+		UFDebug("[WARNING] Requesting for nil production point!!!")
+	end
+	
     if g_client ~= nil then
         g_client:getServerConnection():sendEvent(RequestProductionEvent.new(productionPoint))
     end
