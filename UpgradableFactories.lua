@@ -23,7 +23,6 @@ end
 function UpgradableFactories:loadMap()
 	self.newSavegame = not g_currentMission.missionInfo.savegameDirectory or nil
 	self.loadedProductions = {}
-	self.unknownProductions = {}
 	
 	--Only initialize menu on non-dedicated server games
 	if g_dedicatedServer == nil then
@@ -194,7 +193,7 @@ function UpgradableFactories:initializeLoadedProductions()
 		local prodpoint = getProductionPointFromPosition(loadedProd.position, loadedProd.farmId)
 		if prodpoint then
 			UFInfo("Initialize loaded production %s [is upgradable: %s]", prodpoint.baseName, prodpoint.isUpgradable)
-			UFDebug("If the productions show up here on savegame load, and isUpgradeable is false, they need additional initialization.")
+			UFDebug("If the productions show up here on savegame load, and isUpgradable is false, they need additional initialization.")
 			if prodpoint.isUpgradable then
 				--prodpoint.productionLevel = loadedProd.level
 				--above is done in updateProductionPointLevel
@@ -245,55 +244,8 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		--Request production point data from server
 		if not g_currentMission:getIsServer() then
 			UFDebug("Queueing prodpoint %s for data request", prodpoint:getName())
-			--RequestProductionEvent.sendEvent(prodpoint)
-			table.insert(self.unknownProductions, prodpoint)
-		end
-	end
-end
-
-function UpgradableFactories.onFinalizePlacement(placeableProd)
-	--[[
-	for _,prodpoint in ipairs(g_currentMission.productionChainManager.productionPoints) do
-		if not prodpoint.productionLevel then
-			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
-			if prodpoint.owningPlaceable.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
-				UpgradableFactories:initializeProduction(prodpoint)
-			end
-		end
-	end
-	]]
-	local spec = placeableProd.spec_productionPoint
-	local prodpoint = spec.productionPoint
-	
-	if not prodpoint.productionLevel then
-		UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
-		if prodpoint.owningPlaceable.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
-			UpgradableFactories:initializeProduction(prodpoint)
-		end
-	end
-	
-end
-
-function UpgradableFactories.tryRequestProductionLevelData(placeableProd)
-	UFDebug("raiseActive was called.")
-
-	local spec = placeableProd.spec_productionPoint
-	local prodpoint = spec.productionPoint
-
-	local foundIndex = nil
-	for idx,prod in ipairs(self.unknownProductions) do
-		if prod == prodpoint then
-			UFDebug("Requesting level data for newly registered prodpoint %s", prodpoint:getName())
-			foundIndex = idx
 			RequestProductionEvent.sendEvent(prodpoint)
 		end
-	end
-	
-	--Clean up after requesting
-	if foundIndex ~= nil then
-		table.remove(self.unknownProductions, foundIndex)
-	else
-		UFDebug("The requested production point %s was not initialized before.", prodpoint:getName())
 	end
 end
 
@@ -471,19 +423,49 @@ function UpgradableFactories:loadXML()
 	end
 end
 
-function UpgradableFactories.addOverwrittenFunctions(placeableType)
-	UFDebug("Indirectly overwriting raiseActive on %s", placeableType.name or "name not like this...")
-	SpecializationUtil.registerOverwrittenFunction(placeableType, "raiseActive", PlaceableProductionPoint.updateInfo)
+
+--Placeable addon
+function UpgradableFactories.appendedsetLoadingStep(placeable, loadingStep)
+	if loadingStep == Placeable.LOAD_STEP_SYNCHRONIZED then
+		UFDebug("setLoadingStep of placeable type %s with step %d", placeable.typeName or "no type name", loadingStep)
+		SpecializationUtil.raiseEvent(placeable, "onPlaceableSynchronizedUF")
+	end
 end
 
-function UpgradableFactories.prodPlaceableraiseActive(superFunc, identity)
-	UFDebug("raiseActive on PlaceableProductionPoint!")
-	superFunc(identity)
-	UpgradableFactories.tryRequestProductionLevelData(identity)
+function UpgradableFactories.appendedPlaceableEvents(placeableType)
+	SpecializationUtil.registerEvent(placeableType, "onPlaceableSynchronizedUF")
 end
 
-PlaceableProductionPoint.registerOverwrittenFunctions = Utils.appendedFunction(PlaceableProductionPoint.registerOverwrittenFunctions, UpgradableFactories.addOverwrittenFunctions)
-PlaceableProductionPoint.raiseActive = Utils.appendedFunction(PlaceableProductionPoint.raiseActive, UpgradableFactories.tryRequestProductionLevelData)
-PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
+function UpgradableFactories.appendedPlaceableProductionPointListeners(placeableType)
+	SpecializationUtil.registerEventListener(placeableType, "onPlaceableSynchronizedUF", PlaceableProductionPoint)
+end
+
+-- Adding and appending to classes
+
+--Handler function first
+PlaceableProductionPoint.onPlaceableSynchronizedUF = function(placeableProd)
+	UFDebug("PlaceableProductionPoint.onPlaceableSynchronizedUF event handler on production point: %s", placeableProd.spec_productionPoint.productionPoint:getName())
+	
+	if placeableProd.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
+		local spec = placeableProd.spec_productionPoint
+		local prodpoint = (spec ~= nil and spec.productionPoint) or nil
+	
+		if prodpoint ~= nil then
+			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
+			UpgradableFactories:initializeProduction(prodpoint)
+		else
+			UFInfo("PlaceableProductionPoint without productionPoint is skipped...")
+		end
+	end
+end
+
+--Event raiser and registration next
+Placeable.setLoadingStep = Utils.appendedFunction(Placeable.setLoadingStep, UpgradableFactories.appendedsetLoadingStep)
+Placeable.registerEvents = Utils.appendedFunction(Placeable.registerEvents, UpgradableFactories.appendedPlaceableEvents)
+
+--register event handler last
+PlaceableProductionPoint.registerEventListeners = Utils.appendedFunction(PlaceableProductionPoint.registerEventListeners, UpgradableFactories.appendedPlaceableProductionPointListeners)
+
+--Sync-Unrelated functions
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
