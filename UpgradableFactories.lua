@@ -8,6 +8,7 @@ UpgradableFactories = {
 
 source(modDirectory .. "InGameMenuUpgradableFactories.lua")
 source(modDirectory .. "UpgradeProductionEvent.lua")
+source(modDirectory .. "RequestProductionEvent.lua")
 source(modDirectory .. "ProductionUpgradedEvent.lua")
 addModEventListener(UpgradableFactories)
 
@@ -239,6 +240,12 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		for ft,val in pairs(prodpoint.storage.capacities) do
 			prodpoint.storage.baseCapacities[ft] = val
 		end
+		
+		--Request production point data from server
+		if not g_currentMission:getIsServer() then
+			UFDebug("Requesting data from server for prodpoint %s", prodpoint:getName())
+			RequestProductionEvent.sendEvent(prodpoint)
+		end
 	end
 end
 
@@ -338,24 +345,10 @@ function UpgradableFactories.saveToXML()
 	xmlFile:save()
 end
 
-function UpgradableFactories.sendAllToClient(fsBaseMission, connection)
-	if #g_currentMission.productionChainManager.farmIds > 0 then
-		local idx = 0
-		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
-			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
-				local prodpoints = farmTable.productionPoints
-				for _,prodpoint in ipairs(prodpoints) do
-					if prodpoint.isUpgradable and prodpoint.productionLevel > 1 then
-						-- Fill levels are synced by the game I believe, so we only sync production level for now
-						connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))
-						
-						idx = idx+1
-					end
-				end
-			end
-		end
-		
-		UFDebug("Sent %d production level events to the synced client.", idx)
+function UpgradableFactories.notifyProductionLevel(connection, prodpoint)
+	if prodpoint.isUpgradable then
+		UFDebug("Replying to client request for production data of %s", prodpoint:getName())
+		connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))
 	end
 end
 
@@ -432,6 +425,4 @@ end
 
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
---FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.sendInitialClientState, UpgradableFactories.sendAllToClient)
-FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.onConnectionReady, UpgradableFactories.sendAllToClient)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
