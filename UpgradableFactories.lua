@@ -251,7 +251,8 @@ function UpgradableFactories:initializeProduction(prodpoint)
 	end
 end
 
-function UpgradableFactories.onFinalizePlacement()
+function UpgradableFactories.onFinalizePlacement(placeableProd)
+	--[[
 	for _,prodpoint in ipairs(g_currentMission.productionChainManager.productionPoints) do
 		if not prodpoint.productionLevel then
 			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
@@ -260,9 +261,23 @@ function UpgradableFactories.onFinalizePlacement()
 			end
 		end
 	end
+	]]
+	local spec = placeableProd.spec_productionPoint
+	local prodpoint = spec.productionPoint
+	
+	if not prodpoint.productionLevel then
+		UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
+		if prodpoint.owningPlaceable.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
+			UpgradableFactories:initializeProduction(prodpoint)
+		end
+	end
+	
 end
 
-function UpgradableFactories.tryRequestProductionLevelData(prodpoint)
+function UpgradableFactories.tryRequestProductionLevelData(placeableProd)
+	local spec = placeableProd.spec_productionPoint
+	local prodpoint = spec.productionPoint
+
 	local foundIndex = nil
 	for idx,prod in ipairs(self.unknownProductions) do
 		if prod == prodpoint then
@@ -455,7 +470,7 @@ function UpgradableFactories:loadXML()
 end
 
 
-ProductionPoint.raiseActive = Utils.appendedFunction(ProductionPoint.raiseActive, UpgradableFactories.tryRequestProductionLevelData)
+PlaceableProductionPoint.raiseActive = Utils.appendedFunction(PlaceableProductionPoint.raiseActive, UpgradableFactories.tryRequestProductionLevelData)
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
