@@ -338,7 +338,7 @@ function UpgradableFactories.saveToXML()
 	xmlFile:save()
 end
 
-function UpgradableFactories.sendAllToClient(fsBaseMission, connection, user, farm)
+function UpgradableFactories.sendAllToClient(fsBaseMission, connection)
 	if #g_currentMission.productionChainManager.farmIds > 0 then
 		local idx = 0
 		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
@@ -432,5 +432,6 @@ end
 
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
-FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.sendInitialClientState, UpgradableFactories.sendAllToClient)
+--FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.sendInitialClientState, UpgradableFactories.sendAllToClient)
+FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.onConnectionReady, UpgradableFactories.sendAllToClient)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
