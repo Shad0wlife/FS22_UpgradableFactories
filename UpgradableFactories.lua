@@ -23,6 +23,7 @@ end
 function UpgradableFactories:loadMap()
 	self.newSavegame = not g_currentMission.missionInfo.savegameDirectory or nil
 	self.loadedProductions = {}
+	self.unknownProductions = {}
 	
 	--Only initialize menu on non-dedicated server games
 	if g_dedicatedServer == nil then
@@ -243,8 +244,9 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		
 		--Request production point data from server
 		if not g_currentMission:getIsServer() then
-			UFDebug("Requesting data from server for prodpoint %s", prodpoint:getName())
-			RequestProductionEvent.sendEvent(prodpoint)
+			UFDebug("Queueing prodpoint %s for data request", prodpoint:getName())
+			--RequestProductionEvent.sendEvent(prodpoint)
+			table.insert(self.unknownProductions, prodpoint)
 		end
 	end
 end
@@ -257,6 +259,24 @@ function UpgradableFactories.onFinalizePlacement()
 				UpgradableFactories:initializeProduction(prodpoint)
 			end
 		end
+	end
+end
+
+function UpgradableFactories.tryRequestProductionLevelData(prodpoint)
+	local foundIndex = nil
+	for idx,prod in ipairs(self.unknownProductions) do
+		if prod == prodpoint then
+			UFDebug("Requesting level data for newly registered prodpoint %s", prodpoint:getName())
+			foundIndex = idx
+			RequestProductionEvent.sendEvent(prodpoint)
+		end
+	end
+	
+	--Clean up after requesting
+	if foundIndex ~= nil then
+		table.remove(self.unknownProductions, foundIndex)
+	else
+		UFDebug("The requested production point %s was not initialized before.", prodpoint:getName())
 	end
 end
 
@@ -434,6 +454,8 @@ function UpgradableFactories:loadXML()
 	end
 end
 
+
+ProductionPoint.raiseActive = Utils.appendedFunction(ProductionPoint.raiseActive, UpgradableFactories.tryRequestProductionLevelData)
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
