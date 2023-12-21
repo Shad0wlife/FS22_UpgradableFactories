@@ -36,7 +36,7 @@ end
 function ProductionUpgradedEvent:run(connection)
     assert(not connection:getIsClient(), "ProductionUpgradedEvent is server to client only")
     UFInfo("Running ProductionUpgradedEvent.")
-	UFDebug("Production point %s upgraded to level %d. The production is upgradeable?: %s", self.productionPoint.getName(), self.toLevel, (self.productionPoint.isUpgradable and "true") or "false")
+	UFDebug("Production point %s upgraded to level %d. The production is upgradeable?: %s", self.productionPoint:getName(), self.toLevel, (self.productionPoint.isUpgradable and "true") or "false")
     UpgradableFactories:updateProductionPointLevel(self.productionPoint, self.toLevel)
 end
 
