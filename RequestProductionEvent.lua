@@ -33,7 +33,7 @@ end
 function RequestProductionEvent:run(connection)
     assert(not connection:getIsServer(), "RequestProductionEvent is client to server only")
     UFInfo("Running RequestProductionEvent.")
-    UpgradableFactories:notifyProductionLevel(connection, self.productionPoint)
+    UpgradableFactories.notifyProductionLevel(connection, self.productionPoint)
 end
 
 function RequestProductionEvent.sendEvent(productionPoint)
