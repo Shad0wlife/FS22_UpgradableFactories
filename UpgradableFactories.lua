@@ -24,7 +24,7 @@ function UpgradableFactories:loadMap()
 	self.loadedProductions = {}
 	
 	--Only initialize menu on non-dedicated server games
-	if g_dedicatedServer == nil
+	if g_dedicatedServer == nil then
 		UFDebug("loadMap() on non-dedicated game - initializing the menu now.")
 		InGameMenuUpgradableFactories:initialize()
 	else
@@ -56,18 +56,24 @@ end
 
 
 local function getProductionPointFromPosition(pos, farmId)
+	UFDebug("Trying to find a production at x=%f, z=%f for farmID %d", pos.x, pos.z, farmId)
 	if #g_currentMission.productionChainManager.farmIds < 1 then
+		UFDebug("Skipping finding the production since there are no farmIDs defined.")
 		return nil
 	end
 	
 	if g_currentMission.productionChainManager.farmIds[farmId] ~= nil then
+		UFDebug("FarmID %d exists, checking for production.", farmId)
 		for _,prod in ipairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
-			if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
-				UFDebug("Found production %s at position x=%f, z=%f", prod.getName(), pos.x, pos.z)
+			local distance = MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z)
+			UFDebug("Checking production %s at position x=%f, z=%f", prod:getName(), prod.owningPlaceable.position.x, prod.owningPlaceable.position.z)
+			if distance < 0.0001 then
+				UFDebug("Found production %s at position x=%f, z=%f", prod:getName(), pos.x, pos.z)
 				return prod
 			end
 		end
 	end
+	UFDebug("Found no production at position x=%f, z=%f", prod:getName(), pos.x, pos.z)
 	return nil
 end
 
@@ -175,10 +181,13 @@ end
 
 -- Server only
 function UpgradableFactories:initializeLoadedProductions()
+	UFDebug("Initializing loaded productions.")
 	if self.newSavegame or #self.loadedProductions < 1 then
+		UFDebug("initializeLoadedProductions() skipped due to new savegame or no loaded productions.")
 		return
 	end
 	
+	UFDebug("Working on %d loaded productions.", #self.loadedProductions)
 	for _,loadedProd in ipairs(self.loadedProductions) do
 		local prodpoint = getProductionPointFromPosition(loadedProd.position, loadedProd.farmId)
 		if prodpoint then
@@ -195,12 +204,15 @@ function UpgradableFactories:initializeLoadedProductions()
 				prodpoint.storage.fillLevels = loadedProd.fillLevels
 			end
 			
-			UFDebug("prodpoint %s has baseCyclesPerMinute %s", prodpoint:getName(), (prodpoint.baseCyclesPerMinute ~= nil and prodpoint.baseCyclesPerMinute.tostring()) or "nil")
+			UFDebug("prodpoint %s has upgradePrice %s", prodpoint:getName(), (prodpoint.owningPlaceable.upgradePrice ~= nil and tostring(prodpoint.owningPlaceable.upgradePrice)) or "nil")
+		else
+			UFDebug("The loaded production prodpoint was nil.")
 		end
 	end
 end
 
 function UpgradableFactories:initializeProduction(prodpoint)
+	--Is automatically called at placement, even during savegame loading.
 	if not prodpoint.isUpgradable then
 		UFDebug("Initializing prodpoint %s", prodpoint:getName())
 	
