@@ -19,7 +19,13 @@ end
 
 ---
 function RequestProductionEvent:readStream(streamId, connection)
-    self.productionPoint = NetworkUtil.readNodeObject(streamId)
+    --self.productionPoint = NetworkUtil.readNodeObject(streamId)
+	--manually
+	local uintn = streamReadUIntN(streamId, NetworkNode.OBJECT_SEND_NUM_BITS)
+	UFDebug("Received objectID %d for a production point", self.productionPoint:getName(), uintn)
+	
+	self.productionPoint = NetworkUtil.getObject(uintn)
+	
 	
 	if self.productionPoint ~= nil then
 		UFDebug("Received stream request for production data of %s", self.productionPoint:getName())
@@ -32,7 +38,21 @@ end
 
 ---
 function RequestProductionEvent:writeStream(streamId, connection)
-    NetworkUtil.writeNodeObject(streamId, self.productionPoint)
+	if self.productionPoint ~= nil then
+		UFDebug("Sending stream request for production data of %s", self.productionPoint:getName())
+	else
+		UFDebug("[WARNING] Sending request for nil production point!!!")
+	end
+
+    --NetworkUtil.writeNodeObject(streamId, self.productionPoint)
+	--manually:
+	UFDebug("[WARNING] Sending request for nil production point!!!")
+	local objectId = NetworkUtil.getObjectId(self.productionPoint)
+	local uintn = Utils.getNoNil(objectId, 0)
+	
+	UFDebug("Production point %s is objectID %d", self.productionPoint:getName(), uintn)
+	
+	streamWriteUIntN(streamId, uintn, NetworkNode.OBJECT_SEND_NUM_BITS)
 end
 
 ---
