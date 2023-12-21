@@ -275,6 +275,8 @@ function UpgradableFactories.onFinalizePlacement(placeableProd)
 end
 
 function UpgradableFactories.tryRequestProductionLevelData(placeableProd)
+	UFDebug("raiseActive was called.")
+
 	local spec = placeableProd.spec_productionPoint
 	local prodpoint = spec.productionPoint
 
@@ -469,7 +471,18 @@ function UpgradableFactories:loadXML()
 	end
 end
 
+function UpgradableFactories.addOverwrittenFunctions(placeableType)
+	UFDebug("Indirectly overwriting raiseActive on %s", placeableType.name or "name not like this...")
+	SpecializationUtil.registerOverwrittenFunction(placeableType, "raiseActive", PlaceableProductionPoint.updateInfo)
+end
 
+function UpgradableFactories.prodPlaceableraiseActive(superFunc, identity)
+	UFDebug("raiseActive on PlaceableProductionPoint!")
+	superFunc(identity)
+	UpgradableFactories.tryRequestProductionLevelData(identity)
+end
+
+PlaceableProductionPoint.registerOverwrittenFunctions = Utils.appendedFunction(PlaceableProductionPoint.registerOverwrittenFunctions, UpgradableFactories.addOverwrittenFunctions)
 PlaceableProductionPoint.raiseActive = Utils.appendedFunction(PlaceableProductionPoint.raiseActive, UpgradableFactories.tryRequestProductionLevelData)
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
