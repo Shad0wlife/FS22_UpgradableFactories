@@ -243,7 +243,7 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		
 		--Request production point data from server
 		if not g_currentMission:getIsServer() then
-			UFDebug("Queueing prodpoint %s for data request", prodpoint:getName())
+			UFDebug("Sending level request event for prodpoint %s", prodpoint:getName())
 			RequestProductionEvent.sendEvent(prodpoint)
 		end
 	end
@@ -337,7 +337,7 @@ end
 function UpgradableFactories.notifyProductionLevel(connection, prodpoint)
 	
 	if prodpoint ~= nil then
-		UFDebug("Working on stream request for production data of %s", self.productionPoint:getName())
+		UFDebug("Working on stream request for production data of %s", prodpoint:getName())
 	else
 		UFDebug("[WARNING] Working on request for nil production point!!!")
 	end
