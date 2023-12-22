@@ -60,6 +60,7 @@ function InGameMenuUpgradableFactories.onListSelectionChanged(pageProduction, li
     end
 end
 
+--Needs self since identity is passed as the target of the callback
 function InGameMenuUpgradableFactories:onUpgradeConfirm(confirm, prodpoint)
     if confirm then
         -- Send event, the actual buying/money change needs to be done by the server

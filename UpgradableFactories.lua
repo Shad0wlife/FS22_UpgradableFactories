@@ -19,7 +19,11 @@ function UpgradableFactories:loadMap()
 	self.newSavegame = not g_currentMission.missionInfo.savegameDirectory or nil
 	self.loadedProductions = {}
 	
-	InGameMenuUpgradableFactories:initialize()
+	if g_dedicatedServer == nil then
+		InGameMenuUpgradableFactories:initialize()
+	else
+		UFInfo("Dedicated Server detected. Skipping menu init.")
+	end
 	
 	--Only server does savegame stuff
 	if g_currentMission:getIsServer() then
@@ -109,14 +113,14 @@ local function prodPointUFName(basename, level)
 end
 
 
-function UpgradableFactories:upgradeProductionByOne(prodpoint)
+function UpgradableFactories.upgradeProductionByOne(prodpoint)
 	--deduct the upgrade price from the farmId owning the placeable with the prodpoint
 	g_currentMission:addMoney(-prodpoint.owningPlaceable.upgradePrice, prodpoint:getOwnerFarmId(), MoneyType.SHOP_PROPERTY_BUY, true, true)
 	
-	UpgradableFactories:updateProductionPointLevel(prodpoint, prodpoint.productionLevel + 1)
+	UpgradableFactories.updateProductionPointLevel(prodpoint, prodpoint.productionLevel + 1)
 end
 
-function UpgradableFactories:updateProductionPointLevel(prodpoint, lvl)
+function UpgradableFactories.updateProductionPointLevel(prodpoint, lvl)
 	prodpoint.productionLevel = lvl
 	prodpoint.name = prodPointUFName(prodpoint.baseName, lvl)
 	
@@ -170,12 +174,11 @@ function UpgradableFactories:initializeLoadedProductions()
 		if prodpoint then
 			UFInfo("Initialize loaded production %s [is upgradable: %s]", prodpoint.baseName, prodpoint.isUpgradable)
 			if prodpoint.isUpgradable then
-				--prodpoint.productionLevel = loadedProd.level
-				--above is done in updateProductionPointLevel
+				--prodpoint.productionLevel is set in updateProductionPointLevel
 				prodpoint.owningPlaceable.price = loadedProd.basePrice
 				prodpoint.owningPlaceable.totalValue = getOverallProductionValue(loadedProd.basePrice, loadedProd.level)
 				
-				self:updateProductionPointLevel(prodpoint, loadedProd.level)
+				self.updateProductionPointLevel(prodpoint, loadedProd.level)
 				
 				prodpoint.storage.fillLevels = loadedProd.fillLevels
 			end
@@ -211,22 +214,24 @@ function UpgradableFactories:initializeProduction(prodpoint)
 	end
 end
 
-function UpgradableFactories.onFinalizePlacement()
-	for _,prodpoint in ipairs(g_currentMission.productionChainManager.productionPoints) do
-		if not prodpoint.productionLevel then
+function UpgradableFactories.onFinalizePlacement(placeableProduction)
+	if placeableProduction.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
+		local spec = placeableProduction.spec_productionPoint
+		local prodpoint = (spec ~= nil and spec.productionPoint) or nil
+	
+		if prodpoint ~= nil then
 			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
-			if prodpoint.owningPlaceable.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
-				UpgradableFactories:initializeProduction(prodpoint)
-			end
+			UpgradableFactories:initializeProduction(prodpoint)
+		else
+			UFInfo("PlaceableProductionPoint without productionPoint is skipped...")
 		end
 	end
 end
 
 function UpgradableFactories.setOwnerFarmId(prodpoint, farmId)
 	if farmId == 0 and prodpoint.productions[1].baseCyclesPerMinute then
-		--prodpoint.productionLevel = 1
-		--above is done in updateProductionPointLevel
-		UpgradableFactories:updateProductionPointLevel(prodpoint, 1)
+		--productionLevel is reset to 1 in updateProductionPointLevel
+		UpgradableFactories.updateProductionPointLevel(prodpoint, 1)
 	end
 end
 
@@ -266,9 +271,10 @@ function UpgradableFactories.saveToXML()
 	local xmlFile = XMLFile.create("UpgradableFactoriesXML", xmlFilename, "upgradableFactories")
 	xmlFile:setInt("upgradableFactories#maxLevel", UpgradableFactories.MAX_LEVEL)
 	
-	-- check if player has owned production installed
+	-- check if the game has any farmIds that have productions
 	if #g_currentMission.productionChainManager.farmIds > 0 then
 		local idx = 0
+		-- iterate over all (player-)farmIDs and their productions
 		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
 			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
 				local prodpoints = farmTable.productionPoints
@@ -303,25 +309,6 @@ function UpgradableFactories.saveToXML()
 		
 	end
 	xmlFile:save()
-end
-
-function UpgradableFactories.sendAllToClient(fsBaseMission, connection, user, farm)
-	if #g_currentMission.productionChainManager.farmIds > 0 then
-		local idx = 0
-		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
-			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
-				local prodpoints = farmTable.productionPoints
-				for _,prodpoint in ipairs(prodpoints) do
-					if prodpoint.isUpgradable and prodpoint.productionLevel > 1 then
-						-- Fill levels are synced by the game I believe, so we only sync production level for now
-						connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))
-						
-						idx = idx+1
-					end
-				end
-			end
-		end
-	end
 end
 
 function UpgradableFactories:loadXML()
@@ -395,7 +382,34 @@ function UpgradableFactories:loadXML()
 	end
 end
 
+--Stream prefix functions for initial sync
+function UpgradableFactories.prodpointWriteStream(prodpoint, streamId, connection)
+	-- WriteStream only on connections to a client
+	if not connection:getIsServer() then
+		local level = prodpoint.productionLevel or 1
+
+		streamWriteInt32(streamId, level)
+	end
+end
+
+function UpgradableFactories.prodpointReadStream(prodpoint, streamId, connection)
+	-- ReadStream only from connections to a server
+	if connection:getIsServer() then
+		local level = streamReadInt32(streamId)
+		
+		if prodpoint.isUpgradable then
+			UpgradableFactories.updateProductionPointLevel(prodpoint, level)
+		end
+	end
+end
+
+--Stream patches on production point initial sync
+--prepend level information before everything else, so that the levelup is executed before the storage capacities are handled
+--ATTENTION: Other mods that specifically affect this sync stream need to execute their read and write exactly in order. If not, desync will occur.
+ProductionPoint.readStream = Utils.prependedFunction(ProductionPoint.readStream, UpgradableFactories.prodpointReadStream)
+ProductionPoint.writeStream = Utils.prependedFunction(ProductionPoint.writeStream, UpgradableFactories.prodpointWriteStream)
+
+--Other patches
 PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
-FSBaseMission.sendInitialClientState = Utils.appendedFunction(FSBaseMission.sendInitialClientState, UpgradableFactories.sendAllToClient)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)

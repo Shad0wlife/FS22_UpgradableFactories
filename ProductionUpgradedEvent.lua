@@ -36,7 +36,7 @@ end
 function ProductionUpgradedEvent:run(connection)
     assert(not connection:getIsClient(), "ProductionUpgradedEvent is server to client only")
     UFInfo("Running ProductionUpgradedEvent.")
-    UpgradableFactories:updateProductionPointLevel(self.productionPoint, self.toLevel)
+    UpgradableFactories.updateProductionPointLevel(self.productionPoint, self.toLevel)
 end
 
 function ProductionUpgradedEvent.broadcastEvent(productionPoint, toLevel)

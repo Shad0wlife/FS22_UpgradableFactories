@@ -33,7 +33,7 @@ end
 function UpdateProductionEvent:run(connection)
     assert(not connection:getIsServer(), "UpdateProductionEvent is client to server only")
     UFInfo("Running UpdateProductionEvent.")
-    UpgradableFactories:upgradeProductionByOne(self.productionPoint)
+    UpgradableFactories.upgradeProductionByOne(self.productionPoint)
 end
 
 function UpdateProductionEvent.sendEvent(productionPoint)
