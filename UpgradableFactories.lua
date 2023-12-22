@@ -8,7 +8,6 @@ UpgradableFactories = {
 
 source(modDirectory .. "InGameMenuUpgradableFactories.lua")
 source(modDirectory .. "UpgradeProductionEvent.lua")
-source(modDirectory .. "RequestProductionEvent.lua")
 source(modDirectory .. "ProductionUpgradedEvent.lua")
 addModEventListener(UpgradableFactories)
 
@@ -427,7 +426,7 @@ function UpgradableFactories.prodpointReadStream(prodpoint, streamId, connection
 		UFDebug("Read level %d for production %s from stream.", level, prodpoint:getName())
 		
 		if prodpoint.isUpgradable then
-			updateProductionPointLevel(prodpoint, level)
+			UpgradableFactories:updateProductionPointLevel(prodpoint, level)
 		end
 	end
 end
