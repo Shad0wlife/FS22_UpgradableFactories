@@ -174,6 +174,18 @@ function UpgradableFactories:updateProductionPointLevel(prodpoint, lvl)
 	ProductionUpgradedEvent.broadcastEvent(prodpoint, lvl)
 end
 
+function UpgradableFactories.onFinalizePlacement()
+	for _,prodpoint in ipairs(g_currentMission.productionChainManager.productionPoints) do
+		if not prodpoint.productionLevel then
+			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
+			if prodpoint.owningPlaceable.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
+				UpgradableFactories:initializeProduction(prodpoint)
+			end
+		end
+	end
+end
+
+
 -- Server only
 function UpgradableFactories:onSavegameLoaded()
 	UFDebug("onSavegameLoaded() was called. This should only happen on the server.")
@@ -239,12 +251,6 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		prodpoint.storage.baseCapacities = {}
 		for ft,val in pairs(prodpoint.storage.capacities) do
 			prodpoint.storage.baseCapacities[ft] = val
-		end
-		
-		--Request production point data from server
-		if not g_currentMission:getIsServer() then
-			UFDebug("Sending level request event for prodpoint %s", prodpoint:getName())
-			RequestProductionEvent.sendEvent(prodpoint)
 		end
 	end
 end
@@ -334,24 +340,6 @@ function UpgradableFactories.saveToXML()
 	xmlFile:save()
 end
 
-function UpgradableFactories.notifyProductionLevel(connection, prodpoint)
-	
-	if prodpoint ~= nil then
-		UFDebug("Working on stream request for production data of %s", prodpoint:getName())
-	else
-		UFDebug("[WARNING] Working on request for nil production point!!!")
-	end
-	
-	if connection == nil then
-		UFDebug("[WARNING] Working on request for nil client connection!!!")
-	end
-
-	if prodpoint.isUpgradable then
-		UFDebug("Replying to client request for production data of %s", prodpoint:getName())
-		connection:sendEvent(ProductionUpgradedEvent.new(prodpoint, prodpoint.productionLevel))
-	end
-end
-
 function UpgradableFactories:loadXML()
 	UFInfo("Loading XML...")
 	
@@ -423,49 +411,32 @@ function UpgradableFactories:loadXML()
 	end
 end
 
+function UpgradableFactories.prodpointWriteStream(prodpoint, streamId, connection)
+	if not connection:getIsServer() then
+		local level = prodpoint.productionLevel or 1
+		
+		UFDebug("Writing level %d for production %s to stream.", level, prodpoint:getName())
 
---Placeable addon
-function UpgradableFactories.appendedsetLoadingStep(placeable, loadingStep)
-	if loadingStep == Placeable.LOAD_STEP_SYNCHRONIZED then
-		UFDebug("setLoadingStep of placeable type %s with step %d", placeable.typeName or "no type name", loadingStep)
-		SpecializationUtil.raiseEvent(placeable, "onPlaceableSynchronizedUF")
+		streamWriteInt32(streamId, level)
 	end
 end
 
-function UpgradableFactories.appendedPlaceableEvents(placeableType)
-	SpecializationUtil.registerEvent(placeableType, "onPlaceableSynchronizedUF")
-end
-
-function UpgradableFactories.appendedPlaceableProductionPointListeners(placeableType)
-	SpecializationUtil.registerEventListener(placeableType, "onPlaceableSynchronizedUF", PlaceableProductionPoint)
-end
-
--- Adding and appending to classes
-
---Handler function first
-PlaceableProductionPoint.onPlaceableSynchronizedUF = function(placeableProd)
-	UFDebug("PlaceableProductionPoint.onPlaceableSynchronizedUF event handler on production point: %s", placeableProd.spec_productionPoint.productionPoint:getName())
-	
-	if placeableProd.customEnvironment ~= "pdlc_pumpsAndHosesPack" then
-		local spec = placeableProd.spec_productionPoint
-		local prodpoint = (spec ~= nil and spec.productionPoint) or nil
-	
-		if prodpoint ~= nil then
-			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
-			UpgradableFactories:initializeProduction(prodpoint)
-		else
-			UFInfo("PlaceableProductionPoint without productionPoint is skipped...")
+function UpgradableFactories.prodpointReadStream(prodpoint, streamId, connection)
+	if connection:getIsServer() then
+		local level = streamReadInt32(streamId)
+		UFDebug("Read level %d for production %s from stream.", level, prodpoint:getName())
+		
+		if prodpoint.isUpgradable then
+			updateProductionPointLevel(prodpoint, level)
 		end
 	end
 end
 
---Event raiser and registration next
-Placeable.setLoadingStep = Utils.appendedFunction(Placeable.setLoadingStep, UpgradableFactories.appendedsetLoadingStep)
-Placeable.registerEvents = Utils.appendedFunction(Placeable.registerEvents, UpgradableFactories.appendedPlaceableEvents)
-
---register event handler last
-PlaceableProductionPoint.registerEventListeners = Utils.appendedFunction(PlaceableProductionPoint.registerEventListeners, UpgradableFactories.appendedPlaceableProductionPointListeners)
+--Stream patches
+ProductionPoint.readStream = Utils.prependedFunction(ProductionPoint.readStream, UpgradableFactories.prodpointReadStream)
+ProductionPoint.writeStream = Utils.prependedFunction(ProductionPoint.writeStream, UpgradableFactories.prodpointWriteStream)
 
 --Sync-Unrelated functions
+PlaceableProductionPoint.onFinalizePlacement = Utils.appendedFunction(PlaceableProductionPoint.onFinalizePlacement, UpgradableFactories.onFinalizePlacement)
 FSCareerMissionInfo.saveToXMLFile = Utils.appendedFunction(FSCareerMissionInfo.saveToXMLFile, UpgradableFactories.saveToXML)
 ProductionPoint.setOwnerFarmId = Utils.appendedFunction(ProductionPoint.setOwnerFarmId, UpgradableFactories.setOwnerFarmId)
