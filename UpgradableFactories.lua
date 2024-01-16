@@ -285,10 +285,13 @@ function UpgradableFactories.saveToXML()
 	
 		UFInfo("The productionChainManager has %d farmIds", #g_currentMission.productionChainManager.farmIds)
 		local idx = 0
+		local tempidx = 0
 		-- iterate over all (player-)farmIDs and their productions
 		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
+			tempidx = tempidx + 1
+			UFInfo("Working on farmId %d with %d prodpoints", farmId, #farmTable.productionPoints)
 			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
-				UFInfo("Working on farmId %d with %d prodpoints", farmId, #farmTable.productionPoints)
+				UFInfo("Valid farmId %d with %d prodpoints", farmId, #farmTable.productionPoints)
 				local prodpoints = farmTable.productionPoints
 				for _,prodpoint in ipairs(prodpoints) do
 					if prodpoint.isUpgradable then
@@ -317,6 +320,13 @@ function UpgradableFactories.saveToXML()
 						idx = idx+1
 					end
 				end
+			end
+		end
+		
+		if tempidx == 0 then
+			UFInfo("Weird FarmIDs in ProductionChainManager!!!")
+			for x,y in ipairs(g_currentMission.productionChainManager.farmIds) do
+				UFInfo("Weird entry x=%s with prodpoints=%s", tostring(x), #y.productionPoints)
 			end
 		end
 	else
