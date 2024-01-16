@@ -220,7 +220,10 @@ function UpgradableFactories.onFinalizePlacement(placeableProduction)
 		local prodpoint = (spec ~= nil and spec.productionPoint) or nil
 	
 		if prodpoint ~= nil then
-			UFInfo("initialize production %s [has custom env: %s]", prodpoint:getName(), tostring(prodpoint.owningPlaceable.customEnvironment))
+			UFInfo("initialize production %s for farmID %d [has custom env: %s]", 
+				prodpoint:getName(), 
+				prodpoint:getOwnerFarmId(), 
+				(prodpoint.owningPlaceable.customEnvironment and tostring(prodpoint.owningPlaceable.customEnvironment)) or "no")
 			UpgradableFactories:initializeProduction(prodpoint)
 		else
 			UFInfo("PlaceableProductionPoint without productionPoint is skipped...")
@@ -271,15 +274,25 @@ function UpgradableFactories.saveToXML()
 	local xmlFile = XMLFile.create("UpgradableFactoriesXML", xmlFilename, "upgradableFactories")
 	xmlFile:setInt("upgradableFactories#maxLevel", UpgradableFactories.MAX_LEVEL)
 	
+	if g_currentMission.productionChainManager ~= nil then
+		UFInfo("productionChainManager exists.")
+	else
+		UFInfo("productionChainManager is nil!!!.")
+	end
+	
 	-- check if the game has any farmIds that have productions
 	if #g_currentMission.productionChainManager.farmIds > 0 then
+	
+		UFInfo("The productionChainManager has %d farmIds", #g_currentMission.productionChainManager.farmIds)
 		local idx = 0
 		-- iterate over all (player-)farmIDs and their productions
 		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
 			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
+				UFInfo("Working on farmId %d with %d prodpoints", farmId, #farmTable.productionPoints)
 				local prodpoints = farmTable.productionPoints
 				for _,prodpoint in ipairs(prodpoints) do
 					if prodpoint.isUpgradable then
+						UFInfo("Saving prodpint %s of farmId %d with level %d", prodpoint.baseName, farmId, prodpoint.productionLevel)
 						local key = string.format("upgradableFactories.production(%d)", idx)
 						xmlFile:setInt(key .. "#id", idx+1) --printed id is 1-indexed, but xml element access is 0-indexed
 						xmlFile:setInt(key .. "#farmId", farmId)
@@ -306,7 +319,8 @@ function UpgradableFactories.saveToXML()
 				end
 			end
 		end
-		
+	else
+		UFInfo("No farmIds in the productionChainManager!!!")
 	end
 	xmlFile:save()
 end
