@@ -325,7 +325,7 @@ function UpgradableFactories.saveToXML()
 		
 		if tempidx == 0 then
 			UFInfo("Weird FarmIDs in ProductionChainManager!!!")
-			for x,y in ipairs(g_currentMission.productionChainManager.farmIds) do
+			for x,y in pairs(g_currentMission.productionChainManager.farmIds) do
 				UFInfo("Weird entry x=%s with prodpoints=%s", tostring(x), #y.productionPoints)
 			end
 		end
