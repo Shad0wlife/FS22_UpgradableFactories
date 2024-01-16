@@ -53,7 +53,7 @@ local function getProductionPointFromPosition(pos, farmId)
 	end
 	
 	if g_currentMission.productionChainManager.farmIds[farmId] ~= nil then
-		for _,prod in ipairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
+		for _,prod in pairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
 			if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
 				return prod
 			end
@@ -124,7 +124,7 @@ function UpgradableFactories.updateProductionPointLevel(prodpoint, lvl)
 	prodpoint.productionLevel = lvl
 	prodpoint.name = prodPointUFName(prodpoint.baseName, lvl)
 	
-	for _,prod in ipairs(prodpoint.productions) do
+	for _,prod in pairs(prodpoint.productions) do
 		prod.cyclesPerMinute = getCycleAtLvl(prod.baseCyclesPerMinute, lvl)
 		prod.cyclesPerHour = getCycleAtLvl(prod.baseCyclesPerHour, lvl)
 		prod.cyclesPerMonth = getCycleAtLvl(prod.baseCyclesPerMonth, lvl)
@@ -198,7 +198,7 @@ function UpgradableFactories:initializeProduction(prodpoint)
 		prodpoint.owningPlaceable.upgradePrice = getUpgradePriceAtLvl(prodpoint.owningPlaceable.price, 1)
 		prodpoint.owningPlaceable.totalValue = prodpoint.owningPlaceable.price
 		
-		for _,prod in ipairs(prodpoint.productions) do
+		for _,prod in pairs(prodpoint.productions) do
 			prod.baseCyclesPerMinute = prod.cyclesPerMinute
 			prod.baseCyclesPerHour = prod.cyclesPerHour
 			prod.baseCyclesPerMonth = prod.cyclesPerMonth
@@ -275,33 +275,36 @@ function UpgradableFactories.saveToXML()
 	if #g_currentMission.productionChainManager.farmIds > 0 then
 		local idx = 0
 		-- iterate over all (player-)farmIDs and their productions
-		for farmId,farmTable in ipairs(g_currentMission.productionChainManager.farmIds) do
-			if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
-				local prodpoints = farmTable.productionPoints
-				for _,prodpoint in ipairs(prodpoints) do
-					if prodpoint.isUpgradable then
-						local key = string.format("upgradableFactories.production(%d)", idx)
-						xmlFile:setInt(key .. "#id", idx+1) --printed id is 1-indexed, but xml element access is 0-indexed
-						xmlFile:setInt(key .. "#farmId", farmId)
-						xmlFile:setString(key .. "#name", prodpoint.baseName)
-						xmlFile:setInt(key .. "#level", prodpoint.productionLevel)
-						xmlFile:setInt(key .. "#basePrice", prodpoint.owningPlaceable.price)
-						xmlFile:setInt(key .. "#totalValue", prodpoint.owningPlaceable.totalValue)
-						
-						local key2 = key .. ".position"
-						xmlFile:setFloat(key2 .. "#x", prodpoint.owningPlaceable.position.x)
-						xmlFile:setFloat(key2 .. "#y", prodpoint.owningPlaceable.position.y)
-						xmlFile:setFloat(key2 .. "#z", prodpoint.owningPlaceable.position.z)
-						
-						local j = 0
-						key2 = ""
-						for ft,val in pairs(prodpoint.storage.fillLevels) do
-							key2 = key .. string.format(".fillLevels.fillType(%d)", j)
-							xmlFile:setString(key2 .. "#fillType", g_currentMission.fillTypeManager:getFillTypeByIndex(ft).name)
-							xmlFile:setInt(key2 .. "#fillLevel", val)
-							j = j + 1
+		-- needs to use pairs() and not ipairs() since ipairs stops when an id is missing (as in: a farm has no productions)
+		for farmId,farmTable in pairs(g_currentMission.productionChainManager.farmIds) do
+			if tonumber(farmId) ~= nil then
+				if farmId ~= nil and farmId ~= FarmlandManager.NO_OWNER_FARM_ID and farmId ~= FarmManager.INVALID_FARM_ID then
+					local prodpoints = farmTable.productionPoints
+					for _,prodpoint in pairs(prodpoints) do
+						if prodpoint.isUpgradable then
+							local key = string.format("upgradableFactories.production(%d)", idx)
+							xmlFile:setInt(key .. "#id", idx+1) --printed id is 1-indexed, but xml element access is 0-indexed
+							xmlFile:setInt(key .. "#farmId", farmId)
+							xmlFile:setString(key .. "#name", prodpoint.baseName)
+							xmlFile:setInt(key .. "#level", prodpoint.productionLevel)
+							xmlFile:setInt(key .. "#basePrice", prodpoint.owningPlaceable.price)
+							xmlFile:setInt(key .. "#totalValue", prodpoint.owningPlaceable.totalValue)
+							
+							local key2 = key .. ".position"
+							xmlFile:setFloat(key2 .. "#x", prodpoint.owningPlaceable.position.x)
+							xmlFile:setFloat(key2 .. "#y", prodpoint.owningPlaceable.position.y)
+							xmlFile:setFloat(key2 .. "#z", prodpoint.owningPlaceable.position.z)
+							
+							local j = 0
+							key2 = ""
+							for ft,val in pairs(prodpoint.storage.fillLevels) do
+								key2 = key .. string.format(".fillLevels.fillType(%d)", j)
+								xmlFile:setString(key2 .. "#fillType", g_currentMission.fillTypeManager:getFillTypeByIndex(ft).name)
+								xmlFile:setInt(key2 .. "#fillLevel", val)
+								j = j + 1
+							end
+							idx = idx+1
 						end
-						idx = idx+1
 					end
 				end
 			end
