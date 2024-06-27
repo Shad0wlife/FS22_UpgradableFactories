@@ -54,8 +54,15 @@ local function getProductionPointFromPosition(pos, farmId)
 	
 	if g_currentMission.productionChainManager.farmIds[farmId] ~= nil then
 		for _,prod in pairs(g_currentMission.productionChainManager.farmIds[farmId].productionPoints) do
-			if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
-				return prod
+			if pos.z ~= nil then
+				if MathUtil.getPointPointDistanceSquared(pos.x, pos.z, prod.owningPlaceable.position.x, prod.owningPlaceable.position.z) < 0.0001 then
+					return prod
+				end
+			else
+				-- Old data using y coordinate (height) instead of z, compatibility code for old saves
+				if MathUtil.getPointPointDistanceSquared(pos.x, pos.y, prod.owningPlaceable.position.x, prod.owningPlaceable.position.y) < 0.0001 then
+					return prod
+				end
 			end
 		end
 	end
