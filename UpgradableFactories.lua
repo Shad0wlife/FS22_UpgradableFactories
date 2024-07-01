@@ -187,7 +187,11 @@ function UpgradableFactories:initializeLoadedProductions()
 				
 				self.updateProductionPointLevel(prodpoint, loadedProd.level)
 				
-				prodpoint.storage.fillLevels = loadedProd.fillLevels
+				for ft,val in pairs(prodpoint.storage.fillLevels) do
+					if loadedProd.fillLevels[ft] ~= nil then
+						prodpoint.storage.fillLevels[ft] = loadedProd.fillLevels[ft]
+					end
+				end
 			end
 		end
 	end
@@ -356,7 +360,7 @@ function UpgradableFactories:loadXML()
 			}
 		)
 		
-		local capacities = {}
+		local fillLevels = {}
 		local counter2 = 0
 		while true do
 			local key2 = key .. string.format(".fillLevels.fillType(%d)", counter2)
@@ -367,12 +371,12 @@ function UpgradableFactories:loadXML()
 			end
 			
 			local fillTypeIndex = g_currentMission.fillTypeManager:getFillTypeIndexByName(fillTypeName)
-			capacities[fillTypeIndex] = getXMLInt(xmlFile.handle, key2 .. "#fillLevel")
+			fillLevels[fillTypeIndex] = getXMLInt(xmlFile.handle, key2 .. "#fillLevel")
 			
 			counter2 = counter2 +1
 		end
 		
-		self.loadedProductions[counter+1].fillLevels = capacities
+		self.loadedProductions[counter+1].fillLevels = fillLevels
 		
 		counter = counter +1
 	end
